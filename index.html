@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LeaseTracker</title>
+<meta name="description" content="Track your leasing car kilometres and see if you are on pace.">
+<meta name="theme-color" content="#151F28">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="LeaseTracker">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    box-sizing:border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    --bg:#F2F1ED; --surface:#FFFFFF; --surface-2:#F8F7F4; --border:#DDDBD5;
+    --text:#21232A; --muted:#6B6F76;
+    --green:#2E8B57; --green-soft:rgba(46,139,87,0.12);
+    --red:#C7402F; --red-soft:rgba(199,64,47,0.12);
+    --amber:#C97F1E; --amber-soft:rgba(201,127,30,0.14);
+    --mono:'IBM Plex Mono', 'SFMono-Regular', Menlo, Consolas, monospace;
+    --sans:'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --radius:16px;
+  }
+  html{ scroll-padding-top: env(safe-area-inset-top, 0px); height:100%; }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#14161A; --surface:#1E2126; --surface-2:#23262B; --border:#2C3036;
+      --text:#EDEBE6; --muted:#8B9096;
+      --green:#4FAE6D; --green-soft:rgba(79,174,109,0.16);
+      --red:#E2564B; --red-soft:rgba(226,86,75,0.16);
+      --amber:#E3A23C; --amber-soft:rgba(227,162,60,0.16);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#14161A; --surface:#1E2126; --surface-2:#23262B; --border:#2C3036;
+    --text:#EDEBE6; --muted:#8B9096;
+    --green:#4FAE6D; --green-soft:rgba(79,174,109,0.16);
+    --red:#E2564B; --red-soft:rgba(226,86,75,0.16);
+    --amber:#E3A23C; --amber-soft:rgba(227,162,60,0.16);
+  }
+  *{ box-sizing:border-box; }
+  body{
+    margin:0; min-height:100%; background:var(--bg); color:var(--text);
+    font-family:var(--sans); -webkit-font-smoothing:antialiased;
+  }
+  button, input{ font-family:inherit; color:inherit; }
+  :focus-visible{ outline:2px solid var(--amber); outline-offset:2px; }
+  .wrap{
+    max-width:480px; margin:0 auto;
+    padding:calc(20px + env(safe-area-inset-top,0px)) 18px calc(32px + env(safe-area-inset-bottom,0px));
+  }
+  .topbar{
+    position:relative; display:flex; flex-direction:column; align-items:center;
+    margin-bottom:22px;
+  }
+  .brand{ display:flex; align-items:center; gap:10px; }
+  .brand-logo{
+    width:34px; height:34px; border-radius:9px; display:block;
+    box-shadow:0 2px 8px rgba(0,0,0,0.18), 0 0 0 1px rgba(128,128,128,0.25);
+  }
+  .brand-name{
+    margin:0; font-size:24px; font-weight:700; line-height:1; letter-spacing:-0.02em;
+  }
+  .brand-name span{ color:var(--amber); }
+  .brand-rule{
+    margin-top:11px; width:64px; height:3px; border-radius:3px;
+    background:linear-gradient(90deg, var(--green), var(--amber));
+  }
+  .topbar .icon-btn{ position:absolute; right:0; top:0; }
+  .icon-btn{
+    background:none; border:1px solid var(--border); border-radius:10px;
+    width:34px; height:34px; font-size:15px; cursor:pointer; color:var(--muted);
+  }
+  .icon-btn:active{ background:var(--surface-2); }
+
+  /* ---- Hero / gauge card ---- */
+  .hero-card{
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+    padding:22px 18px 18px; text-align:center; box-shadow:0 1px 0 rgba(0,0,0,0.02);
+  }
+  .gauge-svg{ width:100%; max-width:280px; display:block; margin:0 auto; }
+  .gauge-progress, .gauge-marker{ transition: stroke-dashoffset 700ms cubic-bezier(.4,0,.2,1), stroke 400ms ease; }
+  @media (prefers-reduced-motion: reduce){
+    .gauge-progress, .gauge-marker{ transition:none; }
+  }
+  .hero-number{
+    margin-top:-8px; font-family:var(--mono); font-weight:600;
+    font-size:40px; line-height:1; letter-spacing:-0.01em;
+  }
+  .hero-number .unit{ font-family:var(--sans); font-weight:500; font-size:15px; color:var(--muted); margin-left:6px; }
+  .hero-sub{ margin-top:6px; font-size:13px; color:var(--muted); }
+  .status-banner{
+    margin-top:16px; padding:12px 14px; border-radius:12px; font-size:14px; line-height:1.4;
+    text-align:left;
+  }
+  .status-banner.good{ background:var(--green-soft); color:var(--green); }
+  .status-banner.bad{ background:var(--red-soft); color:var(--red); }
+  .status-banner.neutral{ background:var(--amber-soft); color:var(--amber); }
+  .status-banner strong{ font-weight:700; }
+
+  /* ---- Stats grid ---- */
+  .stats-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:14px; }
+  .stat-card{
+    background:var(--surface); border:1px solid var(--border); border-radius:12px;
+    padding:12px 8px; text-align:center;
+  }
+  .stat-label{ font-size:11px; color:var(--muted); margin-bottom:6px; }
+  .stat-value{ font-family:var(--mono); font-weight:600; font-size:17px; }
+  .stat-value.good{ color:var(--green); }
+  .stat-value.bad{ color:var(--red); }
+  .stat-value.neutral{ color:var(--amber); }
+  .stat-compare{ font-size:10.5px; color:var(--muted); margin-top:3px; }
+
+  /* ---- Update card ---- */
+  .card{
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+    padding:16px 16px; margin-top:14px;
+  }
+  .card h2{ font-size:14px; font-weight:600; margin:0 0 10px; }
+  .field-row{ display:flex; gap:8px; align-items:stretch; }
+  .field-row input{ flex:1; }
+
+  label{ display:block; font-size:13px; color:var(--muted); margin-bottom:14px; }
+  label span.lbl{ display:block; margin-bottom:6px; color:var(--text); font-weight:500; font-size:13.5px; }
+  input[type="number"], input[type="date"]{
+    width:100%; padding:11px 12px; border-radius:10px; border:1px solid var(--border);
+    background:var(--surface-2); color:var(--text); font-size:16px;
+  }
+  input[type="number"]{ font-family:var(--mono); }
+
+  .btn-primary{
+    width:100%; padding:12px; border-radius:10px; border:none;
+    background:var(--text); color:var(--bg); font-weight:600; font-size:15px; cursor:pointer;
+  }
+  .btn-primary:active{ opacity:.85; }
+  .btn-secondary{
+    width:100%; margin-top:10px; padding:11px; border-radius:10px; border:1px solid var(--border);
+    background:none; color:var(--muted); font-size:14px; cursor:pointer;
+  }
+  .muted{ color:var(--muted); }
+  .small{ font-size:12px; }
+  .last-updated{ margin-top:10px; }
+
+  .footer-links{ display:flex; justify-content:space-between; margin-top:18px; padding:0 4px; }
+  .link-btn{
+    background:none; border:none; color:var(--muted); font-size:13px; padding:6px 0; cursor:pointer;
+    text-decoration:underline; text-decoration-color:var(--border);
+  }
+  .link-btn.danger{ color:var(--red); text-decoration-color:transparent; }
+
+  .setup-card{
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+    padding:20px 18px; margin-top:8px;
+  }
+  .setup-card h2{ margin:0 0 4px; font-size:19px; }
+  .setup-card p.intro{ margin:0 0 18px; color:var(--muted); font-size:13.5px; line-height:1.5; }
+
+  [hidden]{ display:none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="topbar">
+    <div class="brand">
+      <img class="brand-logo" src="icon-192.png" alt="" width="34" height="34">
+      <h1 class="brand-name">Lease<span>Tracker</span></h1>
+    </div>
+    <div class="brand-rule" aria-hidden="true"></div>
+    <button class="icon-btn" id="editBtn" aria-label="Edit lease details" hidden>&#9998;</button>
+  </header>
+
+  <!-- SETUP / EDIT VIEW -->
+  <section id="setupView" hidden>
+    <div class="setup-card">
+      <h2 id="setupTitle">Set up your lease</h2>
+      <p class="intro" id="setupIntro">Enter your lease terms once — you'll just update your driven km from here on.</p>
+      <form id="setupForm">
+        <label>
+          <span class="lbl">Maximum kilometres for the lease</span>
+          <input type="number" id="maxKm" inputmode="numeric" min="0" step="1" placeholder="e.g. 30000" required>
+        </label>
+        <label>
+          <span class="lbl">Lease length (months)</span>
+          <input type="number" id="months" inputmode="numeric" min="1" step="1" placeholder="e.g. 36" required>
+        </label>
+        <label>
+          <span class="lbl">Lease start date</span>
+          <input type="date" id="startDate" required>
+        </label>
+        <label>
+          <span class="lbl">Kilometres driven so far</span>
+          <input type="number" id="kmDrivenSetup" inputmode="numeric" min="0" step="1" placeholder="0">
+        </label>
+        <button type="submit" class="btn-primary">Save</button>
+        <button type="button" class="btn-secondary" id="cancelEdit" hidden>Cancel</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- DASHBOARD VIEW -->
+  <section id="dashboardView" hidden>
+
+    <div class="hero-card">
+      <svg class="gauge-svg" viewBox="0 0 200 112" aria-hidden="true">
+        <path class="gauge-track" d="M12,104 A88,88 0 0,1 188,104" fill="none" stroke="var(--border)" stroke-width="14" stroke-linecap="round"/>
+        <path class="gauge-progress" id="gaugeProgress" d="M12,104 A88,88 0 0,1 188,104" fill="none" stroke="var(--green)" stroke-width="14" stroke-linecap="round" pathLength="100" stroke-dasharray="100" stroke-dashoffset="100"/>
+        <line class="gauge-marker" id="gaugeMarker" x1="100" y1="34" x2="100" y2="16" stroke="var(--amber)" stroke-width="4" stroke-linecap="round"/>
+      </svg>
+      <div class="hero-number"><span id="kmLeftNum">0</span><span class="unit">km left</span></div>
+      <div class="hero-sub" id="heroSub">—</div>
+      <div class="status-banner neutral" id="statusBanner">—</div>
+    </div>
+
+    <div class="stats-grid" id="statsGrid">
+      <div class="stat-card">
+        <div class="stat-label">Per day</div>
+        <div class="stat-value" id="dayVal">0</div>
+        <div class="stat-compare" id="dayCompare">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Per week</div>
+        <div class="stat-value" id="weekVal">0</div>
+        <div class="stat-compare" id="weekCompare">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Per month</div>
+        <div class="stat-value" id="monthVal">0</div>
+        <div class="stat-compare" id="monthCompare">—</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Update your driven km</h2>
+      <div class="field-row">
+        <input type="number" id="kmDrivenUpdate" inputmode="numeric" min="0" step="1" placeholder="Total km driven">
+      </div>
+      <button class="btn-primary" id="saveKmBtn" style="margin-top:10px;">Save</button>
+      <div class="muted small last-updated" id="lastUpdated"></div>
+    </div>
+
+    <div class="footer-links">
+      <button class="link-btn" id="editDetailsBtn">Edit lease details</button>
+      <button class="link-btn danger" id="resetBtn">Reset everything</button>
+    </div>
+
+  </section>
+
+</div>
+
+<script>
+(function(){
+  var STORAGE_KEY = 'leaseKmTracker_v1';
+  var MS_PER_DAY = 86400000;
+
+  function loadData(){
+    try{
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if(!raw) return null;
+      var d = JSON.parse(raw);
+      if(!d || typeof d.maxKm !== 'number' || typeof d.months !== 'number' || !d.startDate) return null;
+      return d;
+    }catch(e){ return null; }
+  }
+  function saveData(d){
+    try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(d)); return true; }
+    catch(e){ return false; }
+  }
+
+  function toUTCFromISO(dateStr){
+    var p = dateStr.split('-').map(Number);
+    return Date.UTC(p[0], p[1]-1, p[2]);
+  }
+  function addMonthsUTC(dateStr, months){
+    var p = dateStr.split('-').map(Number);
+    return Date.UTC(p[0], (p[1]-1)+months, p[2]);
+  }
+  function todayUTC(){
+    var n = new Date();
+    return Date.UTC(n.getFullYear(), n.getMonth(), n.getDate());
+  }
+  function daysBetween(a,b){ return Math.round((b-a)/MS_PER_DAY); }
+  function fmtDate(utcMs){
+    var d = new Date(utcMs);
+    return d.toLocaleDateString(undefined, { day:'numeric', month:'short', year:'numeric', timeZone:'UTC' });
+  }
+  function fmtNum(n){
+    return Math.round(n).toLocaleString();
+  }
+  function clamp(n,min,max){ return Math.max(min, Math.min(max,n)); }
+
+  // Elements
+  var editBtn = document.getElementById('editBtn');
+  var setupView = document.getElementById('setupView');
+  var dashboardView = document.getElementById('dashboardView');
+  var setupForm = document.getElementById('setupForm');
+  var setupTitle = document.getElementById('setupTitle');
+  var setupIntro = document.getElementById('setupIntro');
+  var cancelEdit = document.getElementById('cancelEdit');
+  var maxKmInput = document.getElementById('maxKm');
+  var monthsInput = document.getElementById('months');
+  var startDateInput = document.getElementById('startDate');
+  var kmDrivenSetupInput = document.getElementById('kmDrivenSetup');
+
+  var gaugeProgress = document.getElementById('gaugeProgress');
+  var gaugeMarker = document.getElementById('gaugeMarker');
+  var kmLeftNum = document.getElementById('kmLeftNum');
+  var heroSub = document.getElementById('heroSub');
+  var statusBanner = document.getElementById('statusBanner');
+  var statsGrid = document.getElementById('statsGrid');
+  var dayVal = document.getElementById('dayVal');
+  var weekVal = document.getElementById('weekVal');
+  var monthVal = document.getElementById('monthVal');
+  var dayCompare = document.getElementById('dayCompare');
+  var weekCompare = document.getElementById('weekCompare');
+  var monthCompare = document.getElementById('monthCompare');
+  var kmDrivenUpdate = document.getElementById('kmDrivenUpdate');
+  var saveKmBtn = document.getElementById('saveKmBtn');
+  var lastUpdated = document.getElementById('lastUpdated');
+  var editDetailsBtn = document.getElementById('editDetailsBtn');
+  var resetBtn = document.getElementById('resetBtn');
+
+  function showSetup(editing, data){
+    dashboardView.hidden = true;
+    setupView.hidden = false;
+    editBtn.hidden = true;
+    if(editing && data){
+      setupTitle.textContent = 'Edit lease details';
+      setupIntro.textContent = 'Update your lease terms below.';
+      maxKmInput.value = data.maxKm;
+      monthsInput.value = data.months;
+      startDateInput.value = data.startDate;
+      kmDrivenSetupInput.value = data.kmDriven || 0;
+      cancelEdit.hidden = false;
+    } else {
+      setupTitle.textContent = 'Set up your lease';
+      setupIntro.textContent = "Enter your lease terms once — you'll just update your driven km from here on.";
+      setupForm.reset();
+      cancelEdit.hidden = true;
+    }
+  }
+
+  function showDashboard(){
+    setupView.hidden = true;
+    dashboardView.hidden = false;
+    editBtn.hidden = false;
+  }
+
+  function setGauge(usedFraction, timeFraction, color){
+    var offset = 100 - clamp(usedFraction,0,1)*100;
+    gaugeProgress.setAttribute('stroke-dashoffset', offset);
+    gaugeProgress.setAttribute('stroke', color);
+
+    var theta = 180 - clamp(timeFraction,0,1)*180; // degrees, 180=left, 0=right
+    var rad = theta * Math.PI / 180;
+    var cx = 100, cy = 104;
+    var r1 = 78, r2 = 96;
+    var x1 = cx + r1*Math.cos(rad), y1 = cy - r1*Math.sin(rad);
+    var x2 = cx + r2*Math.cos(rad), y2 = cy - r2*Math.sin(rad);
+    gaugeMarker.setAttribute('x1', x1); gaugeMarker.setAttribute('y1', y1);
+    gaugeMarker.setAttribute('x2', x2); gaugeMarker.setAttribute('y2', y2);
+  }
+
+  function setStatValueClass(el, cls){
+    el.classList.remove('good','bad','neutral');
+    el.classList.add(cls);
+  }
+
+  function render(){
+    var data = loadData();
+    if(!data){ showSetup(false, null); return; }
+    showDashboard();
+
+    var startUTC = toUTCFromISO(data.startDate);
+    var endUTC = addMonthsUTC(data.startDate, data.months);
+    var nowUTC = todayUTC();
+
+    var totalDays = Math.max(daysBetween(startUTC, endUTC), 1);
+    var elapsedRaw = daysBetween(startUTC, nowUTC);
+    var remainingRaw = daysBetween(nowUTC, endUTC);
+    var elapsedDays = clamp(elapsedRaw, 0, totalDays);
+    var remainingDays = Math.max(remainingRaw, 0);
+
+    var maxKm = data.maxKm;
+    var kmDriven = data.kmDriven || 0;
+    var kmRemaining = maxKm - kmDriven;
+
+    kmDrivenUpdate.value = kmDriven;
+    if(data.lastUpdated){
+      lastUpdated.textContent = 'Last updated ' + new Date(data.lastUpdated).toLocaleDateString(undefined, {day:'numeric', month:'short', year:'numeric'});
+    } else {
+      lastUpdated.textContent = '';
+    }
+
+    kmLeftNum.textContent = fmtNum(Math.max(kmRemaining, kmRemaining < 0 ? kmRemaining : 0));
+
+    var pace = elapsedDays > 0 ? (kmDriven / elapsedDays) : null;
+    var allowedPerDay = remainingDays > 0 ? (kmRemaining / remainingDays) : 0;
+    if(allowedPerDay < 0) allowedPerDay = 0;
+
+    var timeFraction = elapsedDays / totalDays;
+    var usedFraction = maxKm > 0 ? (kmDriven / maxKm) : 0;
+
+    // ---- State handling ----
+    if(elapsedRaw < 0){
+      // Not started yet
+      statsGrid.hidden = true;
+      heroSub.textContent = 'Starts ' + fmtDate(startUTC);
+      setGauge(0, 0, 'var(--amber)');
+      statusBanner.className = 'status-banner neutral';
+      statusBanner.innerHTML = 'Your lease starts on <strong>' + fmtDate(startUTC) + '</strong>. Come back then to start tracking.';
+      return;
+    }
+
+    if(remainingRaw <= 0){
+      // Lease ended
+      statsGrid.hidden = true;
+      heroSub.textContent = 'Lease ended ' + fmtDate(endUTC);
+      setGauge(usedFraction, 1, kmRemaining < 0 ? 'var(--red)' : 'var(--green)');
+      statusBanner.className = 'status-banner neutral';
+      statusBanner.innerHTML = 'Your lease period has ended. Final tally: <strong>' + fmtNum(kmDriven) + ' / ' + fmtNum(maxKm) + ' km</strong>.';
+      return;
+    }
+
+    statsGrid.hidden = false;
+    heroSub.textContent = remainingDays + (remainingDays === 1 ? ' day left' : ' days left') + ' · until ' + fmtDate(endUTC);
+
+    if(kmRemaining <= 0){
+      // Over the limit already
+      setGauge(usedFraction, timeFraction, 'var(--red)');
+      statusBanner.className = 'status-banner bad';
+      statusBanner.innerHTML = "You've already used your full allowance — <strong>" + fmtNum(kmDriven) + ' / ' + fmtNum(maxKm) + ' km</strong>. Try to minimise further driving.';
+      dayVal.textContent = '0'; weekVal.textContent = '0'; monthVal.textContent = '0';
+      dayCompare.textContent = pace !== null ? ('avg ' + fmtNum(pace) + '/day so far') : '—';
+      weekCompare.textContent = pace !== null ? ('avg ' + fmtNum(pace*7) + '/wk so far') : '—';
+      monthCompare.textContent = pace !== null ? ('avg ' + fmtNum(pace*30.44) + '/mo so far') : '—';
+      setStatValueClass(dayVal,'bad'); setStatValueClass(weekVal,'bad'); setStatValueClass(monthVal,'bad');
+      return;
+    }
+
+    if(pace === null){
+      // Just started, no data yet
+      setGauge(usedFraction, timeFraction, 'var(--amber)');
+      statusBanner.className = 'status-banner neutral';
+      statusBanner.innerHTML = 'Just getting started. Update your driven km below to see how you\'re pacing.';
+      dayVal.textContent = fmtNum(allowedPerDay);
+      weekVal.textContent = fmtNum(allowedPerDay*7);
+      monthVal.textContent = fmtNum(allowedPerDay*30.44);
+      dayCompare.textContent = 'no data yet';
+      weekCompare.textContent = 'no data yet';
+      monthCompare.textContent = 'no data yet';
+      setStatValueClass(dayVal,'neutral'); setStatValueClass(weekVal,'neutral'); setStatValueClass(monthVal,'neutral');
+      return;
+    }
+
+    var isGood = allowedPerDay >= pace;
+    var cls = isGood ? 'good' : 'bad';
+    var color = isGood ? 'var(--green)' : 'var(--red)';
+
+    setGauge(usedFraction, timeFraction, color);
+
+    var projectedTotal = kmDriven + pace*remainingDays;
+    var projectedDiff = maxKm - projectedTotal;
+
+    statusBanner.className = 'status-banner ' + cls;
+    if(isGood){
+      statusBanner.innerHTML = "You're driving less than your allowance — plenty to spare. At this pace you'll finish with about <strong>" + fmtNum(Math.abs(projectedDiff)) + ' km to spare</strong>.';
+    } else {
+      statusBanner.innerHTML = "You're driving more than your allowance — worth easing off. At this pace you'll finish about <strong>" + fmtNum(Math.abs(projectedDiff)) + ' km over</strong>.';
+    }
+
+    dayVal.textContent = fmtNum(allowedPerDay);
+    weekVal.textContent = fmtNum(allowedPerDay*7);
+    monthVal.textContent = fmtNum(allowedPerDay*30.44);
+    dayCompare.textContent = 'avg ' + fmtNum(pace) + '/day so far';
+    weekCompare.textContent = 'avg ' + fmtNum(pace*7) + '/wk so far';
+    monthCompare.textContent = 'avg ' + fmtNum(pace*30.44) + '/mo so far';
+    setStatValueClass(dayVal, cls); setStatValueClass(weekVal, cls); setStatValueClass(monthVal, cls);
+  }
+
+  // ---- Events ----
+  setupForm.addEventListener('submit', function(e){
+    e.preventDefault();
+    var maxKm = parseFloat(maxKmInput.value);
+    var months = parseFloat(monthsInput.value);
+    var startDate = startDateInput.value;
+    var kmDriven = parseFloat(kmDrivenSetupInput.value) || 0;
+    if(!(maxKm > 0) || !(months > 0) || !startDate) return;
+    var existing = loadData();
+    saveData({
+      maxKm: maxKm,
+      months: months,
+      startDate: startDate,
+      kmDriven: kmDriven,
+      lastUpdated: existing ? existing.lastUpdated : new Date().toISOString()
+    });
+    render();
+  });
+
+  editBtn.addEventListener('click', function(){ showSetup(true, loadData()); });
+  editDetailsBtn.addEventListener('click', function(){ showSetup(true, loadData()); });
+  cancelEdit.addEventListener('click', function(){ render(); });
+
+  saveKmBtn.addEventListener('click', function(){
+    var data = loadData();
+    if(!data) return;
+    var val = parseFloat(kmDrivenUpdate.value);
+    if(isNaN(val) || val < 0) return;
+    data.kmDriven = val;
+    data.lastUpdated = new Date().toISOString();
+    saveData(data);
+    render();
+  });
+
+  resetBtn.addEventListener('click', function(){
+    if(confirm('Reset all lease data? This cannot be undone.')){
+      try{ localStorage.removeItem(STORAGE_KEY); }catch(e){}
+      showSetup(false, null);
+    }
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
