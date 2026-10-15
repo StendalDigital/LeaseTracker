@@ -147,6 +147,8 @@
     width:100%; margin-top:10px; padding:11px; border-radius:10px; border:1px solid var(--border);
     background:none; color:var(--muted); font-size:14px; cursor:pointer;
   }
+  .form-error{ margin:-4px 0 12px; font-size:13px; color:var(--red); }
+  #updateError{ margin:10px 0 0; }
   .muted{ color:var(--muted); }
   .small{ font-size:12px; }
   .last-updated{ margin-top:10px; }
@@ -199,9 +201,14 @@
           <input type="date" id="startDate" required>
         </label>
         <label>
-          <span class="lbl">Kilometres driven so far</span>
-          <input type="number" id="kmDrivenSetup" inputmode="numeric" min="0" step="1" placeholder="0">
+          <span class="lbl">Odometer when you got the car (km)</span>
+          <input type="number" id="startOdo" inputmode="numeric" min="0" step="1" placeholder="e.g. 12000" required>
         </label>
+        <label>
+          <span class="lbl">Current odometer (km)</span>
+          <input type="number" id="currentOdo" inputmode="numeric" min="0" step="1" placeholder="Same as above if just started">
+        </label>
+        <div class="form-error" id="setupError" role="alert" hidden></div>
         <button type="submit" class="btn-primary">Save</button>
         <button type="button" class="btn-secondary" id="cancelEdit" hidden>Cancel</button>
       </form>
@@ -241,10 +248,11 @@
     </div>
 
     <div class="card">
-      <h2>Update your driven km</h2>
+      <h2>Update your odometer</h2>
       <div class="field-row">
-        <input type="number" id="kmDrivenUpdate" inputmode="numeric" min="0" step="1" placeholder="Total km driven">
+        <input type="number" id="odoUpdate" inputmode="numeric" min="0" step="1" placeholder="Odometer reading (km)">
       </div>
+      <div class="form-error" id="updateError" role="alert" hidden></div>
       <button class="btn-primary" id="saveKmBtn" style="margin-top:10px;">Save</button>
       <div class="muted small last-updated" id="lastUpdated"></div>
     </div>
@@ -269,6 +277,9 @@
       if(!raw) return null;
       var d = JSON.parse(raw);
       if(!d || typeof d.maxKm !== 'number' || typeof d.months !== 'number' || !d.startDate) return null;
+      // Data saved before the odometer feature: treat old "km driven" as readings from a 0 start
+      if(typeof d.startKm !== 'number') d.startKm = 0;
+      if(typeof d.odometer !== 'number') d.odometer = d.startKm + (d.kmDriven || 0);
       return d;
     }catch(e){ return null; }
   }
@@ -310,7 +321,10 @@
   var maxKmInput = document.getElementById('maxKm');
   var monthsInput = document.getElementById('months');
   var startDateInput = document.getElementById('startDate');
-  var kmDrivenSetupInput = document.getElementById('kmDrivenSetup');
+  var startOdoInput = document.getElementById('startOdo');
+  var currentOdoInput = document.getElementById('currentOdo');
+  var setupError = document.getElementById('setupError');
+  var updateError = document.getElementById('updateError');
 
   var gaugeProgress = document.getElementById('gaugeProgress');
   var gaugeMarker = document.getElementById('gaugeMarker');
@@ -324,7 +338,7 @@
   var dayCompare = document.getElementById('dayCompare');
   var weekCompare = document.getElementById('weekCompare');
   var monthCompare = document.getElementById('monthCompare');
-  var kmDrivenUpdate = document.getElementById('kmDrivenUpdate');
+  var odoUpdate = document.getElementById('odoUpdate');
   var saveKmBtn = document.getElementById('saveKmBtn');
   var lastUpdated = document.getElementById('lastUpdated');
   var editDetailsBtn = document.getElementById('editDetailsBtn');
@@ -334,17 +348,19 @@
     dashboardView.hidden = true;
     setupView.hidden = false;
     editBtn.hidden = true;
+    setupError.hidden = true;
     if(editing && data){
       setupTitle.textContent = 'Edit lease details';
       setupIntro.textContent = 'Update your lease terms below.';
       maxKmInput.value = data.maxKm;
       monthsInput.value = data.months;
       startDateInput.value = data.startDate;
-      kmDrivenSetupInput.value = data.kmDriven || 0;
+      startOdoInput.value = data.startKm;
+      currentOdoInput.value = data.odometer;
       cancelEdit.hidden = false;
     } else {
       setupTitle.textContent = 'Set up your lease';
-      setupIntro.textContent = "Enter your lease terms once — you'll just update your driven km from here on.";
+      setupIntro.textContent = "Enter your lease terms once — after that you just type in your odometer reading.";
       setupForm.reset();
       cancelEdit.hidden = true;
     }
@@ -392,10 +408,11 @@
     var remainingDays = Math.max(remainingRaw, 0);
 
     var maxKm = data.maxKm;
-    var kmDriven = data.kmDriven || 0;
+    var kmDriven = Math.max(data.odometer - data.startKm, 0);
     var kmRemaining = maxKm - kmDriven;
 
-    kmDrivenUpdate.value = kmDriven;
+    odoUpdate.value = data.odometer;
+    updateError.hidden = true;
     if(data.lastUpdated){
       lastUpdated.textContent = 'Last updated ' + new Date(data.lastUpdated).toLocaleDateString(undefined, {day:'numeric', month:'short', year:'numeric'});
     } else {
@@ -494,14 +511,23 @@
     var maxKm = parseFloat(maxKmInput.value);
     var months = parseFloat(monthsInput.value);
     var startDate = startDateInput.value;
-    var kmDriven = parseFloat(kmDrivenSetupInput.value) || 0;
-    if(!(maxKm > 0) || !(months > 0) || !startDate) return;
+    var startKm = parseFloat(startOdoInput.value);
+    var odometer = parseFloat(currentOdoInput.value);
+    if(isNaN(odometer)) odometer = startKm;
+    if(!(maxKm > 0) || !(months > 0) || !startDate || isNaN(startKm) || startKm < 0) return;
+    if(odometer < startKm){
+      setupError.textContent = "Current odometer can't be lower than the odometer when you got the car.";
+      setupError.hidden = false;
+      return;
+    }
+    setupError.hidden = true;
     var existing = loadData();
     saveData({
       maxKm: maxKm,
       months: months,
       startDate: startDate,
-      kmDriven: kmDriven,
+      startKm: startKm,
+      odometer: odometer,
       lastUpdated: existing ? existing.lastUpdated : new Date().toISOString()
     });
     render();
@@ -514,9 +540,15 @@
   saveKmBtn.addEventListener('click', function(){
     var data = loadData();
     if(!data) return;
-    var val = parseFloat(kmDrivenUpdate.value);
+    var val = parseFloat(odoUpdate.value);
     if(isNaN(val) || val < 0) return;
-    data.kmDriven = val;
+    if(val < data.startKm){
+      updateError.textContent = "That reading is lower than your starting odometer. Check the number.";
+      updateError.hidden = false;
+      return;
+    }
+    updateError.hidden = true;
+    data.odometer = val;
     data.lastUpdated = new Date().toISOString();
     saveData(data);
     render();
